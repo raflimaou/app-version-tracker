@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { Plus, Trash2, Pencil, X, Check, Package, Bug, ClipboardCheck, Rocket, Folder, Smartphone, Apple } from "lucide-react";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { db } from "./firebase";
 
-const STORAGE_KEY = "apptracker_data_v2";
+const DOC_REF = doc(db, "apptracker", "shared");
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -146,31 +148,48 @@ export default function AppTracker() {
   const [forms, setForms] = useState({});
   const [filters, setFilters] = useState({ versions: "semua", bugs: "semua", tests: "semua", updates: "semua" });
   const saveTimer = useRef(null);
+  const remoteUpdate = useRef(false);
+  const hasSetInitialProject = useRef(false);
+  const [connError, setConnError] = useState(false);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        setData(parsed);
-        if (parsed.projects.length) setActiveProjectId(parsed.projects[0].id);
-      } else {
-        setData(emptyData());
+    const unsub = onSnapshot(
+      DOC_REF,
+      (snap) => {
+        remoteUpdate.current = true;
+        const parsed = snap.exists() ? snap.data() : emptyData();
+        const normalized = { ...emptyData(), ...parsed };
+        setData(normalized);
+        if (!hasSetInitialProject.current && normalized.projects.length) {
+          hasSetInitialProject.current = true;
+          setActiveProjectId(normalized.projects[0].id);
+        }
+        setLoaded(true);
+        setConnError(false);
+      },
+      (err) => {
+        console.error(err);
+        setConnError(true);
+        setData((d) => d || emptyData());
+        setLoaded(true);
       }
-    } catch (e) {
-      setData(emptyData());
-    }
-    setLoaded(true);
+    );
+    return () => unsub();
   }, []);
 
   useEffect(() => {
     if (!loaded || !data) return;
+    if (remoteUpdate.current) {
+      remoteUpdate.current = false;
+      return;
+    }
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-      } catch (e) {}
-    }, 300);
+      setDoc(DOC_REF, data).catch((e) => {
+        console.error(e);
+        setConnError(true);
+      });
+    }, 400);
   }, [data, loaded]);
 
   if (!loaded || !data) {
@@ -276,6 +295,12 @@ export default function AppTracker() {
   return (
     <div className="app-shell">
       <style>{baseCss}</style>
+
+      {connError && (
+        <div className="conn-banner">
+          Tidak bisa terhubung ke database. Cek koneksi internet, atau konfigurasi Firebase di <code>src/firebase.js</code> dan aturan Firestore-nya.
+        </div>
+      )}
 
       <aside className="sidebar">
         <div className="sidebar-top">
@@ -691,6 +716,26 @@ html, body, #root { height: 100%; margin: 0; }
   color: var(--text);
   font-family: 'Inter', sans-serif;
   overflow: hidden;
+}
+
+.conn-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-bottom: 1px solid var(--danger);
+  font-size: 12.5px;
+  padding: 8px 16px;
+  text-align: center;
+}
+.conn-banner code {
+  font-family: 'IBM Plex Mono', monospace;
+  background: rgba(0,0,0,0.2);
+  padding: 1px 5px;
+  border-radius: 4px;
 }
 
 .loading-screen {
