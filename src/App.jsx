@@ -808,9 +808,11 @@ html, body, #root { height: 100%; margin: 0; }
 .new-project-form {
   display: flex; flex-direction: column; gap: 10px;
   background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px;
+  min-width: 0;
 }
+.new-project-form .add-card-row { flex-direction: column; gap: 10px; }
 
-.field { display: flex; flex-direction: column; gap: 5px; }
+.field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .field-label { font-size: 11.5px; color: var(--text-faint); font-weight: 500; display: flex; align-items: center; gap: 4px; }
 .field-input {
   background: var(--bg);
@@ -821,6 +823,8 @@ html, body, #root { height: 100%; margin: 0; }
   font-family: inherit;
   font-size: 13px;
   resize: vertical;
+  width: 100%;
+  min-width: 0;
 }
 .field-input:focus { outline: none; border-color: var(--accent); }
 .field-input.mono { font-family: 'IBM Plex Mono', monospace; }
