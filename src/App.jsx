@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Trash2, Pencil, X, Check, Package, Bug, ClipboardCheck, Rocket, Folder, Smartphone, Apple, RotateCw, ExternalLink, ArrowRight, MonitorSmartphone } from "lucide-react";
+import { Plus, Trash2, Pencil, X, Check, Package, Bug, ClipboardCheck, Rocket, Folder, Smartphone, Apple, RotateCw, ExternalLink, MonitorSmartphone } from "lucide-react";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { db } from "./firebase";
 
@@ -499,11 +499,11 @@ export default function AppTracker() {
                 />
               )}
             </div>
+
+            <ThreeDevicePreview />
           </>
         )}
       </main>
-
-      <DevicePreviewPanel />
     </div>
   );
 }
@@ -681,131 +681,45 @@ function UpdatesPanel({ items, filter, onFilter, form, setForm, onAdd, onDelete,
   );
 }
 
-const DEFAULT_DEVICES = [
-  { label: "Device 1", url: "", input: "" },
-  { label: "Device 2", url: "", input: "" },
-  { label: "Device 3", url: "", input: "" },
+const PREVIEW_DEVICES = [
+  { id: "1", label: "Device 1" },
+  { id: "2", label: "Device 2" },
+  { id: "3", label: "Device 3" },
 ];
 
-function loadStoredDevices() {
-  try {
-    const saved = JSON.parse(localStorage.getItem("rv_devices") || "null");
-    if (Array.isArray(saved) && saved.length === 3) {
-      return saved.map((d, i) => ({ ...DEFAULT_DEVICES[i], ...d, token: 0 }));
-    }
-  } catch {}
-  return DEFAULT_DEVICES.map((d) => ({ ...d, token: 0 }));
-}
-
-function normalizeUrl(raw) {
-  const url = raw.trim();
-  if (!url) return "";
-  if (/^https?:\/\//i.test(url)) return url;
-  return "https://" + url;
-}
-
-function DeviceCard({ device, onLoad, onReload, onOpen, onInputChange, onClear }) {
-  return (
-    <div className="device-card">
-      <div className="device-card-head">
-        <span className="device-label"><MonitorSmartphone size={13} /> {device.label}</span>
-        {device.url && (
-          <div className="device-card-actions">
-            <button className="device-icon-btn" title="Muat ulang" onClick={onReload}><RotateCw size={12} /></button>
-            <button className="device-icon-btn" title="Buka di tab baru" onClick={onOpen}><ExternalLink size={12} /></button>
-            <button className="device-icon-btn" title="Kosongkan" onClick={onClear}><X size={12} /></button>
-          </div>
-        )}
-      </div>
-
-      <form
-        className="device-url-row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          onLoad();
-        }}
-      >
-        <input
-          className="device-url-input"
-          value={device.input}
-          placeholder="Tempel link di sini..."
-          onChange={(e) => onInputChange(e.target.value)}
-        />
-        <button className="device-icon-btn device-go-btn" type="submit" title="Muat"><ArrowRight size={13} /></button>
-      </form>
-
-      <div className="device-frame-wrap">
-        {device.url ? (
-          <iframe key={device.token} className="device-frame" src={device.url} title={device.label} />
-        ) : (
-          <div className="device-placeholder">
-            <MonitorSmartphone size={22} />
-            <span>Belum ada link</span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function PinnedAppPreview() {
+function PreviewDeviceCard({ device }) {
   const [token, setToken] = useState(0);
-  const src = `${import.meta.env.BASE_URL}jkt48-pm.html`;
+  const src = `${import.meta.env.BASE_URL}jkt48-pm.html?pv=${device.id}`;
+
   return (
-    <div className="pinned-preview">
-      <div className="pinned-preview-head">
-        <span className="device-label"><MonitorSmartphone size={13} /> JKT48 Private Message</span>
+    <div className="preview-device-card">
+      <div className="preview-device-head">
+        <span className="device-label"><MonitorSmartphone size={13} /> {device.label}</span>
         <div className="device-card-actions">
           <button className="device-icon-btn" title="Muat ulang" onClick={() => setToken((t) => t + 1)}><RotateCw size={12} /></button>
           <button className="device-icon-btn" title="Buka di tab baru" onClick={() => window.open(src, "_blank")}><ExternalLink size={12} /></button>
         </div>
       </div>
-      <div className="pinned-frame-wrap">
-        <iframe key={token} className="pinned-frame" src={src} title="JKT48 Private Message" />
+      <div className="preview-device-frame-wrap">
+        <iframe key={token} className="preview-device-frame" src={src} title={device.label} />
       </div>
     </div>
   );
 }
 
-function DevicePreviewPanel() {
-  const [devices, setDevices] = useState(loadStoredDevices);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("rv_devices", JSON.stringify(devices.map(({ label, url, input }) => ({ label, url, input }))));
-    } catch {}
-  }, [devices]);
-
-  function patch(i, p) {
-    setDevices((ds) => ds.map((d, idx) => (idx === i ? { ...d, ...p } : d)));
-  }
-
+function ThreeDevicePreview() {
   return (
-    <aside className="device-panel">
-      <div className="device-panel-header">
-        <span className="device-panel-title"><MonitorSmartphone size={15} /> Preview Device</span>
-        <p className="device-panel-hint">Tempel link aplikasi/staging yang mau direview. Login dilakukan manual di masing-masing device.</p>
+    <section className="three-device-preview">
+      <div className="three-device-header">
+        <span className="device-panel-title"><MonitorSmartphone size={15} /> Preview Device — JKT48 Private Message</span>
+        <p className="device-panel-hint">3 device berdampingan, masing-masing punya sesi/login terpisah. Login dilakukan manual di tiap device.</p>
       </div>
-      <div className="device-list">
-        {devices.map((d, i) => (
-          <DeviceCard
-            key={i}
-            device={d}
-            onInputChange={(v) => patch(i, { input: v })}
-            onLoad={() => patch(i, { url: normalizeUrl(d.input), input: normalizeUrl(d.input) })}
-            onReload={() => patch(i, { token: (d.token || 0) + 1 })}
-            onOpen={() => window.open(d.url, "_blank")}
-            onClear={() => patch(i, { url: "", input: "" })}
-          />
+      <div className="three-device-row">
+        {PREVIEW_DEVICES.map((d) => (
+          <PreviewDeviceCard key={d.id} device={d} />
         ))}
       </div>
-
-      <div className="device-panel-divider">
-        <span>Preview penuh</span>
-      </div>
-
-      <PinnedAppPreview />
-    </aside>
+    </section>
   );
 }
 
@@ -1100,110 +1014,60 @@ html, body, #root { height: 100%; margin: 0; }
   border: 1px dashed var(--border); border-radius: 8px;
 }
 
-.device-panel {
-  width: 300px;
-  flex-shrink: 0;
-  background: var(--bg-elevated);
-  border-left: 1px solid var(--border);
-  padding: 16px 14px 24px;
-  overflow-y: auto;
+.three-device-preview {
+  border-top: 1px solid var(--border);
+  padding: 20px 26px 32px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
-.device-panel-header { display: flex; flex-direction: column; gap: 6px; }
+.three-device-header { display: flex; flex-direction: column; gap: 4px; }
 .device-panel-title {
   display: flex; align-items: center; gap: 6px;
-  font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 13.5px; color: var(--text);
+  font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 14.5px; color: var(--text);
 }
-.device-panel-hint { font-size: 11px; color: var(--text-faint); line-height: 1.5; margin: 0; }
+.device-panel-hint { font-size: 12px; color: var(--text-faint); line-height: 1.5; margin: 0; }
 
-.device-list { display: flex; flex-direction: column; gap: 16px; }
+.three-device-row { display: flex; gap: 18px; flex-wrap: wrap; }
 
-.device-card {
-  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
-  padding: 10px; display: flex; flex-direction: column; gap: 8px;
+.preview-device-card {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  padding: 10px; display: flex; flex-direction: column; gap: 8px; width: 250px; flex-shrink: 0;
 }
-.device-card-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.preview-device-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .device-label {
   display: flex; align-items: center; gap: 5px;
-  font-size: 11.5px; font-weight: 500; color: var(--text-dim);
+  font-size: 12px; font-weight: 500; color: var(--text-dim);
 }
 .device-card-actions { display: flex; gap: 4px; }
 
 .device-icon-btn {
   display: flex; align-items: center; justify-content: center;
-  width: 22px; height: 22px; border-radius: 5px; border: 1px solid var(--border);
+  width: 24px; height: 24px; border-radius: 5px; border: 1px solid var(--border);
   background: transparent; color: var(--text-faint); cursor: pointer; flex-shrink: 0;
 }
 .device-icon-btn:hover { background: var(--panel-hover); color: var(--text); border-color: var(--border-strong); }
 
-.device-url-row { display: flex; gap: 4px; }
-.device-url-input {
-  flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
-  padding: 6px 8px; color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 11px;
-}
-.device-url-input:focus { outline: none; border-color: var(--accent); }
-.device-url-input::placeholder { color: var(--text-faint); }
-.device-go-btn { background: var(--accent-bg); color: var(--accent-text); border-color: transparent; }
-.device-go-btn:hover { background: var(--accent); color: #1a1206; }
-
-.device-frame-wrap {
-  width: 184px;
-  height: 399px;
-  border-radius: 16px;
-  overflow: hidden;
-  position: relative;
-  background: #0a0e10;
-  box-shadow: 0 0 0 6px #0a0e10, 0 0 0 7px var(--border-strong);
-}
-.device-frame {
-  width: 375px;
-  height: 812px;
-  border: 0;
-  background: #fff;
-  transform-origin: top left;
-  transform: scale(0.4907);
-}
-.device-placeholder {
-  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 6px; color: var(--text-faint); font-size: 10.5px; text-align: center; padding: 10px;
-}
-
-.device-panel-divider {
-  display: flex; align-items: center; gap: 8px;
-  color: var(--text-faint); font-size: 10.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em;
-}
-.device-panel-divider::before, .device-panel-divider::after {
-  content: ""; flex: 1; height: 1px; background: var(--border);
-}
-
-.pinned-preview {
-  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
-  padding: 10px; display: flex; flex-direction: column; gap: 8px;
-}
-.pinned-preview-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-.pinned-frame-wrap {
-  width: 100%;
-  max-width: 252px;
-  height: 546px;
+.preview-device-frame-wrap {
+  width: 230px;
+  height: 498px;
   margin: 0 auto;
-  border-radius: 20px;
+  border-radius: 18px;
   overflow: hidden;
   position: relative;
   background: #0a0e10;
   box-shadow: 0 0 0 7px #0a0e10, 0 0 0 8px var(--border-strong);
 }
-.pinned-frame {
+.preview-device-frame {
   width: 375px;
   height: 812px;
   border: 0;
   background: #fff;
   transform-origin: top left;
-  transform: scale(0.672);
+  transform: scale(0.6133);
 }
 
-@media (max-width: 1060px) {
-  .device-panel { display: none; }
+@media (max-width: 860px) {
+  .three-device-row { justify-content: center; }
 }
 `;

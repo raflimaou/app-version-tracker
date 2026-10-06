@@ -4,6 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>JKT48 Private Message – Onboarding</title>
+<script>
+(function () {
+  try {
+    var pv = new URLSearchParams(location.search).get('pv');
+    if (!pv) return;
+    var proto = Storage.prototype;
+    var _get = proto.getItem, _set = proto.setItem, _rm = proto.removeItem;
+    var pre = '__rv_' + pv + '__';
+    proto.getItem = function (k) { return _get.call(this, pre + k); };
+    proto.setItem = function (k, v) { return _set.call(this, pre + k, v); };
+    proto.removeItem = function (k) { return _rm.call(this, pre + k); };
+  } catch (e) {}
+})();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
