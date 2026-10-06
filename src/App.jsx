@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Trash2, Pencil, X, Check, Package, Bug, ClipboardCheck, Rocket, Folder, Smartphone, Apple, RotateCw, ExternalLink, MonitorSmartphone, Upload, Undo2 } from "lucide-react";
+import { Plus, Trash2, Pencil, X, Check, Search, ChevronDown, Copy, Package, Bug, ClipboardCheck, Rocket, Folder, Smartphone, Apple, RotateCw, ExternalLink, MonitorSmartphone, Upload, Undo2 } from "lucide-react";
 import { doc, onSnapshot, setDoc, deleteDoc } from "firebase/firestore";
 import { db } from "./firebase";
 
@@ -83,7 +83,7 @@ function Pill({ label, color, bg, onClick, active, icon }) {
   );
 }
 
-function TextField({ label, value, onChange, placeholder, textarea, mono }) {
+function TextField({ label, value, onChange, placeholder, textarea, mono, rows, hint }) {
   const Comp = textarea ? "textarea" : "input";
   return (
     <label className="field">
@@ -93,8 +93,9 @@ function TextField({ label, value, onChange, placeholder, textarea, mono }) {
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        rows={textarea ? 3 : undefined}
+        rows={textarea ? rows || 3 : undefined}
       />
+      {hint && <span className="field-hint">{hint}</span>}
     </label>
   );
 }
@@ -480,7 +481,7 @@ export default function AppTracker() {
                   items={projectUpdates}
                   filter={filters.updates}
                   onFilter={(v) => setFilter("updates", v)}
-                  form={forms.update || { title: "", description: "", priority: "sedang", platform: "keduanya" }}
+                  form={forms.update || { title: "", description: "", check: "", priority: "sedang", platform: "keduanya" }}
                   setForm={(v) => setForm("update", v)}
                   onAdd={() => {
                     const f = forms.update || {};
@@ -488,14 +489,16 @@ export default function AppTracker() {
                     addEntity("updates", activeProject.id, {
                       title: f.title.trim(),
                       description: f.description?.trim() || "",
+                      check: f.check?.trim() || "",
                       priority: f.priority || "sedang",
                       platform: f.platform || "keduanya",
                       status: "rencana",
                     });
-                    setForm("update", { title: "", description: "", priority: "sedang", platform: "keduanya" });
+                    setForm("update", { title: "", description: "", check: "", priority: "sedang", platform: "keduanya" });
                   }}
                   onDelete={(id) => removeEntity("updates", id)}
                   onStatusChange={(id, status) => patchEntity("updates", id, { status })}
+                  onPatch={(id, patch) => patchEntity("updates", id, patch)}
                 />
               )}
             </div>
@@ -636,12 +639,65 @@ function TestsPanel({ items, filter, onFilter, form, setForm, onAdd, onDelete, o
   );
 }
 
-function UpdatesPanel({ items, filter, onFilter, form, setForm, onAdd, onDelete, onStatusChange }) {
+const CHECK_PLACEHOLDER = "Contoh:\nLogin user@user.com › Home › Chats › buka Olla\n• Kolom balasan tampil \"Sisa hari ini 3/3\"\n• Kirim 3 balasan → input terkunci";
+
+function scrollToPreview() {
+  const el = document.querySelector(".three-device-preview");
+  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function CheckBox({ text }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const lines = text.split("\n").filter((l) => l.trim()).length;
+  async function copy(e) {
+    e.stopPropagation();
+    try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch {}
+  }
+  return (
+    <div className={"check-box" + (open ? " open" : "")}>
+      <button className="check-head" onClick={() => setOpen(!open)}>
+        <Search size={13} />
+        <span>Cek di preview</span>
+        <em>{lines} langkah</em>
+        <ChevronDown size={14} className="check-chev" />
+      </button>
+      {open && (
+        <div className="check-body">
+          <div className="check-steps">{text}</div>
+          <div className="check-actions">
+            <button className="btn btn-sm" onClick={scrollToPreview}><MonitorSmartphone size={13} /> Buka preview</button>
+            <button className="btn btn-sm" onClick={copy}>{copied ? <><Check size={13} /> Tersalin</> : <><Copy size={13} /> Salin langkah</>}</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UpdateEditor({ item, onSave, onCancel }) {
+  const [f, setF] = useState({ title: item.title, description: item.description || "", check: item.check || "" });
+  return (
+    <div className="edit-card">
+      <TextField label="Judul update" value={f.title} onChange={(v) => setF({ ...f, title: v })} />
+      <TextField label="Deskripsi" value={f.description} onChange={(v) => setF({ ...f, description: v })} textarea rows={6} />
+      <TextField label="Cek di preview" value={f.check} onChange={(v) => setF({ ...f, check: v })} placeholder={CHECK_PLACEHOLDER} textarea rows={5} hint="Langkah untuk mengecek fitur ini di Preview Device: akun, halaman, dan apa yang harus terlihat." />
+      <div className="edit-actions">
+        <button className="btn btn-primary" onClick={() => f.title.trim() && onSave({ title: f.title.trim(), description: f.description.trim(), check: f.check.trim() })}><Check size={14} /> Simpan</button>
+        <button className="btn" onClick={onCancel}><X size={14} /> Batal</button>
+      </div>
+    </div>
+  );
+}
+
+function UpdatesPanel({ items, filter, onFilter, form, setForm, onAdd, onDelete, onStatusChange, onPatch }) {
+  const [editing, setEditing] = useState(null);
   return (
     <div className="panel-body">
       <div className="add-card">
         <TextField label="Judul update" value={form.title} onChange={(v) => setForm({ ...form, title: v })} placeholder="Integrasi pembayaran otomatis" />
         <TextField label="Deskripsi" value={form.description} onChange={(v) => setForm({ ...form, description: v })} placeholder="Detail rencana, opsional" textarea />
+        <TextField label="Cek di preview" value={form.check || ""} onChange={(v) => setForm({ ...form, check: v })} placeholder={CHECK_PLACEHOLDER} textarea rows={4} hint="Opsional. Langkah untuk mengecek fitur ini di Preview Device: akun, halaman, dan apa yang harus terlihat." />
         <div className="field">
           <span className="field-label">Prioritas</span>
           <div className="pill-row">
@@ -668,10 +724,18 @@ function UpdatesPanel({ items, filter, onFilter, form, setForm, onAdd, onDelete,
                 <select className="status-select" value={u.status} onChange={(e) => onStatusChange(u.id, e.target.value)}>
                   {UPDATE_STATUSES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                 </select>
+                <button className="icon-btn small edit" title="Edit" onClick={() => setEditing(editing === u.id ? null : u.id)}><Pencil size={13} /></button>
                 <button className="icon-btn danger small" onClick={() => onDelete(u.id)}><Trash2 size={13} /></button>
               </div>
-              <h3 className="list-card-title">{u.title}</h3>
-              {u.description && <p className="list-card-desc">{u.description}</p>}
+              {editing === u.id ? (
+                <UpdateEditor item={u} onCancel={() => setEditing(null)} onSave={(patch) => { onPatch(u.id, patch); setEditing(null); }} />
+              ) : (
+                <>
+                  <h3 className="list-card-title">{u.title}</h3>
+                  {u.description && <p className="list-card-desc pre">{u.description}</p>}
+                  {u.check ? <CheckBox text={u.check} /> : <button className="check-add" onClick={() => setEditing(u.id)}><Plus size={12} /> Tambah langkah cek di preview</button>}
+                </>
+              )}
             </div>
           );
         })}
@@ -1199,6 +1263,23 @@ html, body, #root { height: 100%; margin: 0; }
 .list-card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
 .list-card-title { font-size: 14px; font-weight: 500; margin: 0; color: var(--text); }
 .list-card-desc { font-size: 12.5px; color: var(--text-dim); margin: 5px 0 0; line-height: 1.55; }
+.list-card-desc.pre { white-space: pre-wrap; }
+.field-hint { display: block; font-size: 11px; color: var(--text-faint); }
+.icon-btn.edit:hover { background: var(--accent-bg); color: var(--accent-text); border-color: var(--accent); }
+.check-box { margin-top: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); overflow: hidden; }
+.check-box.open { border-color: var(--accent); }
+.check-head { width: 100%; display: flex; align-items: center; gap: 7px; padding: 8px 10px; background: none; border: none; color: var(--accent-text); font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; text-align: left; }
+.check-head em { font-style: normal; font-size: 11px; color: var(--text-dim); font-weight: 400; }
+.check-chev { margin-left: auto; color: var(--text-dim); transition: transform .15s; }
+.check-box.open .check-chev { transform: rotate(180deg); }
+.check-body { padding: 0 10px 10px; }
+.check-steps { white-space: pre-wrap; font-size: 12.5px; line-height: 1.6; color: var(--text); background: var(--panel); border-radius: 6px; padding: 9px 11px; }
+.check-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.btn.btn-sm { padding: 5px 10px; font-size: 12px; }
+.check-add { margin-top: 8px; background: none; border: 1px dashed var(--border); border-radius: 6px; color: var(--text-dim); font: inherit; font-size: 11.5px; padding: 4px 9px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.check-add:hover { color: var(--accent-text); border-color: var(--accent); }
+.edit-card { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
+.edit-actions { display: flex; gap: 8px; }
 
 .status-select {
   margin-left: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
