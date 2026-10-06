@@ -24,7 +24,7 @@ Dashboard untuk memantau versi aplikasi (Android & iOS terpisah), mencatat bug, 
    rules_version = '2';
    service cloud.firestore {
      match /databases/{database}/documents {
-       match /apptracker/shared {
+       match /apptracker/{docId} {
          allow read, write: if true;
        }
      }
@@ -81,3 +81,11 @@ Cukup bagikan link GitHub Pages di atas ke tim kamu. Karena datanya sekarang di 
 
 - Kalau ada tulisan merah "Tidak bisa terhubung ke database" di aplikasinya, cek lagi isian `src/firebase.js` dan status Firestore Rules di langkah 1.
 - Data tidak lagi tersimpan per-browser — semua device yang buka link yang sama akan melihat/mengubah data yang sama.
+
+## Upload preview (index.html terbaru)
+
+Di bagian **Preview Device** (bawah tab) ada tombol **Upload index.html baru**. Pilih file HTML aplikasinya, maka ketiga device langsung memakai file itu dan tim yang membuka link yang sama ikut melihat versi barunya — tanpa perlu commit/deploy ulang ke GitHub. Tombol **Pakai bawaan** mengembalikan ke file `public/jkt48-pm.html` di repo.
+
+- Agar tersimpan untuk tim, Firestore Rules harus mengizinkan dokumen `apptracker/preview` — pakai rule `match /apptracker/{docId}` seperti di langkah 5 di atas (kalau sebelumnya masih `match /apptracker/shared`, ganti lalu **Publish**).
+- Batas ukuran: sekitar 1 MB setelah dikompres (file HTML ~300 KB hanya jadi ~100 KB). Kalau HTML-nya menanam gambar base64 yang besar, kecilkan dulu.
+- Tiap device punya sesi/login sendiri (penyimpanan dipisah otomatis), jadi bisa login sebagai User/Admin/Member bersamaan.

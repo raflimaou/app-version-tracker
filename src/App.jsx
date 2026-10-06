@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Trash2, Pencil, X, Check, Package, Bug, ClipboardCheck, Rocket, Folder, Smartphone, Apple, RotateCw, ExternalLink, MonitorSmartphone } from "lucide-react";
-import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { Plus, Trash2, Pencil, X, Check, Package, Bug, ClipboardCheck, Rocket, Folder, Smartphone, Apple, RotateCw, ExternalLink, MonitorSmartphone, Upload, Undo2 } from "lucide-react";
+import { doc, onSnapshot, setDoc, deleteDoc } from "firebase/firestore";
 import { db } from "./firebase";
 
 const DOC_REF = doc(db, "apptracker", "shared");
@@ -687,9 +687,68 @@ const PREVIEW_DEVICES = [
   { id: "3", label: "Device 3" },
 ];
 
-function PreviewDeviceCard({ device }) {
+/* ---------- Preview file (index.html) yang bisa di-upload sendiri ---------- */
+
+const PREVIEW_REF = doc(db, "apptracker", "preview");
+const MAX_ENCODED_CHARS = 950000; // batas dokumen Firestore ~1 MiB
+
+async function encodeHtml(html) {
+  if (typeof CompressionStream === "function") {
+    try {
+      const stream = new Blob([html]).stream().pipeThrough(new CompressionStream("gzip"));
+      const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+      let bin = "";
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      return { encoding: "gzip-b64", payload: btoa(bin) };
+    } catch {}
+  }
+  return { encoding: "raw", payload: html };
+}
+
+async function decodeHtml(encoding, payload) {
+  if (encoding !== "gzip-b64") return payload;
+  const bin = atob(payload);
+  const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+  return await new Response(stream).text();
+}
+
+// Menyisipkan script pemisah storage ke dalam HTML, supaya tiap device punya sesi/login sendiri.
+function withIsolation(html, pv) {
+  const script =
+    "<script>(function(){try{window.__RV_PV__=" + JSON.stringify(pv) + ";var p=Storage.prototype,g=p.getItem,s=p.setItem,r=p.removeItem,pre='__rv_'+" +
+    JSON.stringify(pv) + "+'__';p.getItem=function(k){return g.call(this,pre+k)};p.setItem=function(k,v){return s.call(this,pre+k,v)};p.removeItem=function(k){return r.call(this,pre+k)};}catch(e){}})();<\/script>";
+  if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (m) => m + script);
+  if (/<html[^>]*>/i.test(html)) return html.replace(/<html[^>]*>/i, (m) => m + script);
+  return script + html;
+}
+
+function formatSize(n) {
+  return n >= 1024 * 1024 ? (n / 1024 / 1024).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
+}
+
+function formatWhen(ts) {
+  try {
+    return new Date(ts).toLocaleString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}
+
+function PreviewDeviceCard({ device, custom }) {
   const [token, setToken] = useState(0);
-  const src = `${import.meta.env.BASE_URL}jkt48-pm.html?pv=${device.id}`;
+  const builtinSrc = `${import.meta.env.BASE_URL}jkt48-pm.html?pv=${device.id}`;
+  const srcDoc = custom ? withIsolation(custom.html, device.id) : undefined;
+
+  function openNewTab() {
+    if (!custom) {
+      window.open(builtinSrc, "_blank");
+      return;
+    }
+    const url = URL.createObjectURL(new Blob([srcDoc], { type: "text/html" }));
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
 
   return (
     <div className="preview-device-card">
@@ -697,26 +756,126 @@ function PreviewDeviceCard({ device }) {
         <span className="device-label"><MonitorSmartphone size={13} /> {device.label}</span>
         <div className="device-card-actions">
           <button className="device-icon-btn" title="Muat ulang" onClick={() => setToken((t) => t + 1)}><RotateCw size={12} /></button>
-          <button className="device-icon-btn" title="Buka di tab baru" onClick={() => window.open(src, "_blank")}><ExternalLink size={12} /></button>
+          <button className="device-icon-btn" title="Buka di tab baru" onClick={openNewTab}><ExternalLink size={12} /></button>
         </div>
       </div>
       <div className="preview-device-frame-wrap">
-        <iframe key={token} className="preview-device-frame" src={src} title={device.label} />
+        {custom ? (
+          <iframe key={token + "-" + custom.version} className="preview-device-frame" srcDoc={srcDoc} title={device.label} />
+        ) : (
+          <iframe key={token} className="preview-device-frame" src={builtinSrc} title={device.label} />
+        )}
       </div>
     </div>
   );
 }
 
 function ThreeDevicePreview() {
+  const [custom, setCustom] = useState(null); // { html, name, size, version }
+  const [status, setStatus] = useState(null); // { type: "ok" | "error" | "busy", text }
+  const fileInput = useRef(null);
+  const decodeSeq = useRef(0);
+
+  useEffect(() => {
+    const unsub = onSnapshot(
+      PREVIEW_REF,
+      async (snap) => {
+        const seq = ++decodeSeq.current;
+        if (!snap.exists()) {
+          setCustom(null);
+          return;
+        }
+        try {
+          const d = snap.data();
+          const html = await decodeHtml(d.encoding, d.payload);
+          if (seq !== decodeSeq.current) return;
+          setCustom({ html, name: d.name || "index.html", size: d.size || html.length, version: d.updatedAt || 0 });
+        } catch (e) {
+          console.error(e);
+        }
+      },
+      (err) => console.error("preview listener:", err)
+    );
+    return () => unsub();
+  }, []);
+
+  async function handleFile(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    setStatus({ type: "busy", text: "Memproses " + file.name + "..." });
+    try {
+      const html = await file.text();
+      if (!/<(html|body|!doctype)/i.test(html)) {
+        setStatus({ type: "error", text: "File ini sepertinya bukan halaman HTML. Pilih file index.html aplikasinya." });
+        return;
+      }
+      const { encoding, payload } = await encodeHtml(html);
+      if (payload.length > MAX_ENCODED_CHARS) {
+        setStatus({ type: "error", text: "File terlalu besar (" + formatSize(file.size) + "). Batasnya sekitar 1 MB setelah dikompres — kecilkan gambar/aset yang ditanam di dalam HTML." });
+        return;
+      }
+      const meta = { name: file.name, size: file.size, updatedAt: Date.now() };
+      decodeSeq.current++;
+      setCustom({ html, name: meta.name, size: meta.size, version: meta.updatedAt });
+      setStatus({ type: "busy", text: "Preview sudah diganti di layar ini. Menyimpan agar tim ikut melihat..." });
+      try {
+        await setDoc(PREVIEW_REF, { ...meta, encoding, payload });
+        setStatus({ type: "ok", text: "Preview diperbarui — tim ikut melihat versi baru ini." });
+      } catch (err) {
+        console.error(err);
+        setStatus({
+          type: "error",
+          text: "Preview berubah di browser ini saja, belum tersimpan untuk tim (database menolak). Cek Firestore Rules — lihat README bagian \"Upload preview\".",
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      setStatus({ type: "error", text: "Gagal membaca file: " + err.message });
+    }
+  }
+
+  async function resetToBuiltin() {
+    decodeSeq.current++;
+    setCustom(null);
+    try {
+      await deleteDoc(PREVIEW_REF);
+      setStatus({ type: "ok", text: "Kembali memakai file bawaan." });
+    } catch (err) {
+      console.error(err);
+      setStatus({ type: "error", text: "Tidak bisa menghapus dari database (cek Firestore Rules)." });
+    }
+  }
+
   return (
     <section className="three-device-preview">
       <div className="three-device-header">
-        <span className="device-panel-title"><MonitorSmartphone size={15} /> Preview Device — JKT48 Private Message</span>
-        <p className="device-panel-hint">3 device berdampingan, masing-masing punya sesi/login terpisah. Login dilakukan manual di tiap device.</p>
+        <div className="three-device-title-row">
+          <span className="device-panel-title"><MonitorSmartphone size={15} /> Preview Device — JKT48 Private Message</span>
+          <div className="preview-upload-actions">
+            <input ref={fileInput} type="file" accept=".html,.htm,text/html" style={{ display: "none" }} onChange={handleFile} />
+            <button className="btn btn-primary btn-sm" onClick={() => fileInput.current && fileInput.current.click()}>
+              <Upload size={13} /> Upload index.html baru
+            </button>
+            {custom && (
+              <button className="btn btn-sm" onClick={resetToBuiltin} title="Kembali memakai file bawaan di repo">
+                <Undo2 size={13} /> Pakai bawaan
+              </button>
+            )}
+          </div>
+        </div>
+        <p className="device-panel-hint">
+          3 device berdampingan, masing-masing punya sesi/login terpisah. Login dilakukan manual di tiap device.
+          {" "}
+          {custom
+            ? <>File aktif: <b>{custom.name}</b> · {formatSize(custom.size)} · diunggah {formatWhen(custom.version)}</>
+            : <>File aktif: bawaan (<code>jkt48-pm.html</code>).</>}
+        </p>
+        {status && <p className={"preview-status preview-status-" + status.type}>{status.text}</p>}
       </div>
       <div className="three-device-row">
         {PREVIEW_DEVICES.map((d) => (
-          <PreviewDeviceCard key={d.id} device={d} />
+          <PreviewDeviceCard key={d.id} device={d} custom={custom} />
         ))}
       </div>
     </section>
@@ -1021,7 +1180,16 @@ html, body, #root { height: 100%; margin: 0; }
   flex-direction: column;
   gap: 16px;
 }
-.three-device-header { display: flex; flex-direction: column; gap: 4px; }
+.three-device-header { display: flex; flex-direction: column; gap: 6px; }
+.three-device-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.preview-upload-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-sm { padding: 6px 10px; font-size: 12px; }
+.device-panel-hint code { font-family: 'IBM Plex Mono', monospace; background: var(--panel-hover); padding: 1px 5px; border-radius: 4px; }
+.device-panel-hint b { color: var(--text-dim); font-weight: 500; }
+.preview-status { margin: 0; font-size: 12px; line-height: 1.5; padding: 7px 10px; border-radius: 6px; max-width: 760px; }
+.preview-status-ok { color: var(--success); background: var(--success-bg); }
+.preview-status-error { color: var(--danger); background: var(--danger-bg); }
+.preview-status-busy { color: var(--text-dim); background: var(--panel-hover); }
 .device-panel-title {
   display: flex; align-items: center; gap: 6px;
   font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 14.5px; color: var(--text);
