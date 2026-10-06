@@ -748,6 +748,25 @@ function DeviceCard({ device, onLoad, onReload, onOpen, onInputChange, onClear }
   );
 }
 
+function PinnedAppPreview() {
+  const [token, setToken] = useState(0);
+  const src = `${import.meta.env.BASE_URL}jkt48-pm.html`;
+  return (
+    <div className="pinned-preview">
+      <div className="pinned-preview-head">
+        <span className="device-label"><MonitorSmartphone size={13} /> JKT48 Private Message</span>
+        <div className="device-card-actions">
+          <button className="device-icon-btn" title="Muat ulang" onClick={() => setToken((t) => t + 1)}><RotateCw size={12} /></button>
+          <button className="device-icon-btn" title="Buka di tab baru" onClick={() => window.open(src, "_blank")}><ExternalLink size={12} /></button>
+        </div>
+      </div>
+      <div className="pinned-frame-wrap">
+        <iframe key={token} className="pinned-frame" src={src} title="JKT48 Private Message" />
+      </div>
+    </div>
+  );
+}
+
 function DevicePreviewPanel() {
   const [devices, setDevices] = useState(loadStoredDevices);
 
@@ -780,6 +799,12 @@ function DevicePreviewPanel() {
           />
         ))}
       </div>
+
+      <div className="device-panel-divider">
+        <span>Preview penuh</span>
+      </div>
+
+      <PinnedAppPreview />
     </aside>
   );
 }
@@ -1076,7 +1101,7 @@ html, body, #root { height: 100%; margin: 0; }
 }
 
 .device-panel {
-  width: 232px;
+  width: 300px;
   flex-shrink: 0;
   background: var(--bg-elevated);
   border-left: 1px solid var(--border);
@@ -1145,7 +1170,40 @@ html, body, #root { height: 100%; margin: 0; }
   gap: 6px; color: var(--text-faint); font-size: 10.5px; text-align: center; padding: 10px;
 }
 
-@media (max-width: 980px) {
+.device-panel-divider {
+  display: flex; align-items: center; gap: 8px;
+  color: var(--text-faint); font-size: 10.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em;
+}
+.device-panel-divider::before, .device-panel-divider::after {
+  content: ""; flex: 1; height: 1px; background: var(--border);
+}
+
+.pinned-preview {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px; display: flex; flex-direction: column; gap: 8px;
+}
+.pinned-preview-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.pinned-frame-wrap {
+  width: 100%;
+  max-width: 252px;
+  height: 546px;
+  margin: 0 auto;
+  border-radius: 20px;
+  overflow: hidden;
+  position: relative;
+  background: #0a0e10;
+  box-shadow: 0 0 0 7px #0a0e10, 0 0 0 8px var(--border-strong);
+}
+.pinned-frame {
+  width: 375px;
+  height: 812px;
+  border: 0;
+  background: #fff;
+  transform-origin: top left;
+  transform: scale(0.672);
+}
+
+@media (max-width: 1060px) {
   .device-panel { display: none; }
 }
 `;
