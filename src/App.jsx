@@ -770,6 +770,46 @@ function PreviewDeviceCard({ device, custom }) {
   );
 }
 
+const DEMO_ACCOUNTS = [
+  { role: "User", email: "user@user.com", password: "12345678" },
+  { role: "Admin", email: "admin@admin.com", password: "12345678" },
+  { role: "Member", email: "olla@olla.com", password: "12345678" },
+];
+
+function CopyValue({ value }) {
+  const [copied, setCopied] = useState(false);
+  function copy() {
+    try {
+      navigator.clipboard.writeText(value).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1200);
+      });
+    } catch {}
+  }
+  return (
+    <button type="button" className="copy-value" title="Klik untuk salin" onClick={copy}>
+      {copied ? "tersalin ✓" : value}
+    </button>
+  );
+}
+
+function DemoAccounts() {
+  return (
+    <div className="demo-accounts">
+      <span className="demo-accounts-title">Akun demo untuk mencoba (klik untuk salin)</span>
+      <div className="demo-accounts-grid">
+        {DEMO_ACCOUNTS.map((a) => (
+          <div className="demo-account" key={a.role}>
+            <span className="demo-account-role">{a.role}</span>
+            <div className="demo-account-row"><span>Email</span><CopyValue value={a.email} /></div>
+            <div className="demo-account-row"><span>Password</span><CopyValue value={a.password} /></div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ThreeDevicePreview() {
   const [custom, setCustom] = useState(null); // { html, name, size, version }
   const [status, setStatus] = useState(null); // { type: "ok" | "error" | "busy", text }
@@ -873,6 +913,7 @@ function ThreeDevicePreview() {
         </p>
         {status && <p className={"preview-status preview-status-" + status.type}>{status.text}</p>}
       </div>
+      <DemoAccounts />
       <div className="three-device-row">
         {PREVIEW_DEVICES.map((d) => (
           <PreviewDeviceCard key={d.id} device={d} custom={custom} />
@@ -1186,6 +1227,23 @@ html, body, #root { height: 100%; margin: 0; }
 .btn-sm { padding: 6px 10px; font-size: 12px; }
 .device-panel-hint code { font-family: 'IBM Plex Mono', monospace; background: var(--panel-hover); padding: 1px 5px; border-radius: 4px; }
 .device-panel-hint b { color: var(--text-dim); font-weight: 500; }
+.demo-accounts {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; max-width: 810px;
+}
+.demo-accounts-title { font-size: 12px; font-weight: 500; color: var(--text-dim); }
+.demo-accounts-grid { display: flex; gap: 12px; flex-wrap: wrap; }
+.demo-account {
+  flex: 1; min-width: 200px; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 9px 11px; display: flex; flex-direction: column; gap: 5px;
+}
+.demo-account-role { font-size: 11px; font-weight: 600; color: var(--accent-text); text-transform: uppercase; letter-spacing: 0.04em; }
+.demo-account-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--text-faint); }
+.copy-value {
+  font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--text);
+  background: transparent; border: 1px dashed transparent; border-radius: 4px; padding: 1px 5px; cursor: pointer;
+}
+.copy-value:hover { border-color: var(--border-strong); background: var(--panel-hover); }
 .preview-status { margin: 0; font-size: 12px; line-height: 1.5; padding: 7px 10px; border-radius: 6px; max-width: 760px; }
 .preview-status-ok { color: var(--success); background: var(--success-bg); }
 .preview-status-error { color: var(--danger); background: var(--danger-bg); }
